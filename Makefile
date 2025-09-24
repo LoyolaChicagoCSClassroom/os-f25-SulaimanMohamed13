@@ -23,7 +23,9 @@ ODIR = obj
 SDIR = src
 
 OBJS = \
+        multiboot_header.o\
 	kernel_main.o \
+        rprintf.o \
 
 # Make sure to keep a blank line here after OBJS list
 
