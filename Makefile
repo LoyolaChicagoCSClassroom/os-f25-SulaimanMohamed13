@@ -1,4 +1,3 @@
-
 UNAME_M := $(shell uname -m)
 
 ifeq ($(UNAME_M),aarch64)
@@ -17,17 +16,17 @@ OBJDUMP := $(PREFIX)objdump
 OBJCOPY := $(PREFIX)objcopy
 SIZE := $(PREFIX)size
 CONFIGS := -DCONFIG_HEAP_SIZE=4096
-CFLAGS := -ffreestanding -mgeneral-regs-only -mno-mmx -m32 -march=i386 -fno-pie -fno-stack-protector -g3 -Wall 
+CFLAGS := -ffreestanding -mgeneral-regs-only -mno-mmx -m32 -march=i386 -fno-pie -fno-stack-protector -g3 -Wall
 
 ODIR = obj
 SDIR = src
 
 OBJS = \
         multiboot_header.o\
-	kernel_main.o \
+        kernel_main.o \
         rprintf.o \
-
-# Make sure to keep a blank line here after OBJS list
+        interrupt.o \
+        keyboard.o \
 
 OBJ = $(patsubst %,$(ODIR)/%,$(OBJS))
 
@@ -36,7 +35,6 @@ $(ODIR)/%.o: $(SDIR)/%.c
 
 $(ODIR)/%.o: $(SDIR)/%.s
 	$(CC) $(CFLAGS) -c -g -o $@ $^
-
 
 all: bin rootfs.img
 
@@ -51,7 +49,7 @@ rootfs.img:
 	dd if=/dev/zero of=rootfs.img bs=1M count=32
 	$(GRUBLOC)grub-mkimage -p "(hd0,msdos1)/boot/grub" -o grub.img -O i386-pc normal biosdisk multiboot multiboot2 configfile fat exfat part_msdos
 	dd if=$(BOOTIMG) of=rootfs.img conv=notrunc
-	dd if=grub.img of=rootfs.img seek=1 conv=notrunc     # ADD THIS LINE
+	dd if=grub.img of=rootfs.img seek=1 conv=notrunc
 	echo 'start=2048, type=83, bootable' | sfdisk rootfs.img
 	mkfs.vfat --offset 2048 -F16 rootfs.img
 	mcopy -i rootfs.img@@1M kernel ::/

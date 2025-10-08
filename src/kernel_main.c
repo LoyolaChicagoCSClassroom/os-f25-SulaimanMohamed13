@@ -1,14 +1,8 @@
 #include <stdint.h>
 #include "rprintf.h"
+#include "interrupt.h"
+#include "keyboard.h"
 
-/* Port I/O helper */
-uint8_t inb(uint16_t _port) {
-    uint8_t rv;
-    __asm__ __volatile__ ("inb %1, %0" : "=a"(rv) : "dN"(_port));
-    return rv;
-}
-
-/* VGA text mode */
 #define VGA_W      80
 #define VGA_H      25
 #define VGA_COLOR  0x07
@@ -31,56 +25,57 @@ static void scroll_if_needed(void) {
 
 int putc(int data) {
     char ch = (char)data;
+
     if (ch == '\n') {
-        cur_row++;
-        cur_col = 0;
+        cur_row++; cur_col = 0;
     } else if (ch == '\r') {
         cur_col = 0;
-    } else {
-        vga_put_at(ch, cur_row, cur_col++);
-        if (cur_col >= VGA_W) {
-            cur_col = 0;
-            cur_row++;
+    } else if (ch == '\b') {
+        // move back and clear the cell
+        if (cur_col > 0) {
+            cur_col--;
+            vga_put_at(' ', cur_row, cur_col);
+        } else if (cur_row > 0) {
+            cur_row--; cur_col = VGA_W - 1;
+            vga_put_at(' ', cur_row, cur_col);
         }
+    } else {
+        // print any visible char, including space, and advance
+        vga_put_at(ch, cur_row, cur_col);
+        cur_col++;
+        if (cur_col >= VGA_W) { cur_col = 0; cur_row++; }
     }
+
     scroll_if_needed();
     return 0;
 }
 
-void delay(int milliseconds) {
-    for (volatile int i = 0; i < milliseconds * 100000; i++) {
-        // Busy wait
-    }
-}
+static void delay(int ms) { for (volatile int i = 0; i < ms * 100000; i++) {} }
 
-/* kernel entry */
 void kernel_main() {
-    // Clear screen
+    // clear screen
     for (int r = 0; r < VGA_H; ++r)
         for (int c = 0; c < VGA_W; ++c)
             VGA[r * VGA_W + c] = ((uint16_t)VGA_COLOR << 8) | ' ';
-    
-    // Test output with delays
-    esp_printf(putc, "Hello World!\r\n");
-    delay(500);
-    
-    esp_printf(putc, "OS Boot Successful!\r\n");
-    delay(500);
-    
-    esp_printf(putc, "Current Execution Level: Kernel Mode\r\n");
-    delay(500);
-    
-    // Print 25 lines with delay to see scrolling
-    for (int i = 1; i <= 25; i++) {
-        esp_printf(putc, "Test line %d\r\n", i);
-        delay(300);
-    }
-    
-    // Keyboard loop
-    while(1) {
-        uint8_t status = inb(0x64);
-        if(status & 1) {
-            uint8_t scancode = inb(0x60);
-        }
-    }
+
+    esp_printf(putc, "===========================================\r\n");
+    esp_printf(putc, "  Custom OS - COMP 310 Operating Systems\r\n");
+    esp_printf(putc, "===========================================\r\n\r\n");
+    delay(200);
+
+    esp_printf(putc, "Initializing interrupt system...\r\n");
+    remap_pic();
+    load_gdt();
+    init_idt();
+    esp_printf(putc, "[OK] IDT & PIC ready\r\n");
+
+    esp_printf(putc, "Enabling interrupts...\r\n");
+    asm("sti");
+    esp_printf(putc, "[OK] IRQs enabled\r\n\r\n");
+
+    esp_printf(putc, "Type 'help' for commands.\r\n\r\n");
+    init_keyboard();   // prints the "$ " prompt
+
+    // idle loop; keyboard IRQs do the work
+    while (1) asm("hlt");
 }
