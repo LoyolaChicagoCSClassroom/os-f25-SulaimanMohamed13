@@ -27,6 +27,8 @@ OBJS = \
         rprintf.o \
         interrupt.o \
         keyboard.o \
+        page.o \
+        test_page.o \
 
 OBJ = $(patsubst %,$(ODIR)/%,$(OBJS))
 
