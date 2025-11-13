@@ -2,6 +2,7 @@
 #include "rprintf.h"
 #include "interrupt.h"
 #include "keyboard.h"
+#include "fat.h"
 
 #define VGA_W      80
 #define VGA_H      25
@@ -31,7 +32,6 @@ int putc(int data) {
     } else if (ch == '\r') {
         cur_col = 0;
     } else if (ch == '\b') {
-        // move back and clear the cell
         if (cur_col > 0) {
             cur_col--;
             vga_put_at(' ', cur_row, cur_col);
@@ -40,7 +40,6 @@ int putc(int data) {
             vga_put_at(' ', cur_row, cur_col);
         }
     } else {
-        // print any visible char, including space, and advance
         vga_put_at(ch, cur_row, cur_col);
         cur_col++;
         if (cur_col >= VGA_W) { cur_col = 0; cur_row++; }
@@ -52,8 +51,44 @@ int putc(int data) {
 
 static void delay(int ms) { for (volatile int i = 0; i < ms * 100000; i++) {} }
 
-void kernel_main() {
-    // clear screen
+// FAT filesystem test command
+void test_fat_filesystem(void) {
+    esp_printf(putc, "\r\n=== FAT Filesystem Test ===\r\n");
+    
+    esp_printf(putc, "Initializing FAT filesystem...\r\n");
+    if (fatInit() != 0) {
+        esp_printf(putc, "[ERROR] Failed to initialize FAT filesystem!\r\n");
+        return;
+    }
+    
+    esp_printf(putc, "\r\nOpening test file 'testfile.txt'...\r\n");
+    
+    struct file* fh = fatOpen("testfile.txt");
+    if (!fh) {
+        esp_printf(putc, "[ERROR] Failed to open file!\r\n");
+        return;
+    }
+    
+    static char buffer[512];
+    
+    esp_printf(putc, "Reading file contents...\r\n");
+    
+    int bytes_read = fatRead(fh, buffer, sizeof(buffer) - 1);
+    if (bytes_read < 0) {
+        esp_printf(putc, "[ERROR] Failed to read file!\r\n");
+        return;
+    }
+    
+    buffer[bytes_read] = '\0';
+    
+    esp_printf(putc, "\r\n--- File Contents (%d bytes) ---\r\n", bytes_read);
+    esp_printf(putc, "%s\r\n", buffer);
+    esp_printf(putc, "--- End of File ---\r\n");
+    
+    esp_printf(putc, "\r\n[OK] FAT filesystem test completed!\r\n");
+}
+
+void kernel_main(void) {
     for (int r = 0; r < VGA_H; ++r)
         for (int c = 0; c < VGA_W; ++c)
             VGA[r * VGA_W + c] = ((uint16_t)VGA_COLOR << 8) | ' ';
@@ -73,9 +108,11 @@ void kernel_main() {
     asm("sti");
     esp_printf(putc, "[OK] IRQs enabled\r\n\r\n");
 
-    esp_printf(putc, "Type 'help' for commands.\r\n\r\n");
-    init_keyboard();   // prints the "$ " prompt
+    test_fat_filesystem();
+    esp_printf(putc, "\r\n");
 
-    // idle loop; keyboard IRQs do the work
+    esp_printf(putc, "Type 'help' for commands.\r\n\r\n");
+    init_keyboard();
+
     while (1) asm("hlt");
 }

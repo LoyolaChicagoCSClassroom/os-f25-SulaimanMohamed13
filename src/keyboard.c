@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include "keyboard.h"
 #include "rprintf.h"
+#include "fat.h"
 
 extern int putc(int data);
 
@@ -60,6 +61,7 @@ static void process_command(void) {
         my_puts("  echo  - Echo test message\r\n");
         my_puts("  about - About this OS\r\n");
         my_puts("  time  - Show uptime message\r\n");
+        my_puts("  fat   - Test FAT filesystem\r\n");
     } else if (my_strcmp(cmd_buffer, "clear") == 0) {
         for (int i = 0; i < 25; i++) my_puts("\r\n");
         my_puts("Screen cleared!\r\n");
@@ -72,6 +74,34 @@ static void process_command(void) {
     } else if (my_strcmp(cmd_buffer, "time") == 0) {
         my_puts("\r\nSystem has been running since boot.\r\n");
         my_puts("Uptime: Unknown (no timer yet)\r\n");
+    } else if (my_strcmp(cmd_buffer, "fat") == 0) {
+        my_puts("\r\n=== FAT Filesystem Test ===\r\n");
+        
+        my_puts("Initializing FAT filesystem...\r\n");
+        if (fatInit() != 0) {
+            my_puts("[ERROR] Failed to initialize!\r\n");
+        } else {
+            my_puts("[OK] FAT initialized\r\n");
+            
+            my_puts("Opening 'testfile.txt'...\r\n");
+            struct file* fh = fatOpen("testfile.txt");
+            if (!fh) {
+                my_puts("[ERROR] File not found!\r\n");
+            } else {
+                static char buffer[256];
+                int bytes = fatRead(fh, buffer, sizeof(buffer) - 1);
+                if (bytes > 0) {
+                    buffer[bytes] = '\0';
+                    my_puts("File contents:\r\n");
+                    my_puts(buffer);
+                    my_puts("\r\n[OK] Read ");
+                    esp_printf(putc, "%d", bytes);
+                    my_puts(" bytes\r\n");
+                } else {
+                    my_puts("[ERROR] Read failed!\r\n");
+                }
+            }
+        }
     } else {
         my_puts("\r\nUnknown command: ");
         my_puts(cmd_buffer);

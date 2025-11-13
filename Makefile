@@ -29,6 +29,8 @@ OBJS = \
         keyboard.o \
         page.o \
         test_page.o \
+        fat.o \
+        ide.o
 
 OBJ = $(patsubst %,$(ODIR)/%,$(OBJS))
 
